@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+	<title>secret base</title>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1.0" />
+  <script>
+    window.addEventListener('DOMContentLoaded', function() {
+      // クエリパラメータでデータが与えられている場合は自動読み込み
+      const searchParams = new URLSearchParams(window.location.search);
+      if (!searchParams.has('mosaicId') || !searchParams.has('netType')) {
+        return;
+      }
+      
+      // パラメータの取得と検証
+      const queryMosaicId = searchParams.get('mosaicId');
+      const queryNetType = searchParams.get('netType');
+      netType = -1;
+      switch (queryNetType) {
+        case '104':
+        case 'main':
+          netType = "104";
+          break;
+
+        case '152':
+        case 'test':
+          netType = "152";
+          break;
+
+        default:
+          return;
+      }
+
+      document.forms.formMosaic.inputMosaicId.value = queryMosaicId;
+      document.forms.formMosaic.inputNetType.value = netType;
+      getMosaicInfo();
+    });
+  </script>
+</head>
+
+<body id="top">
+	<article>
+    <section>
+      <form id="formMosaic">
+        <div class="mb-3 row">
+          <label for="inputMosaicId" class="col-sm-2 col-form-label">Mosaic ID</label>
+          <div class="col-sm-10">
+            <input type="text" class="form-control" id="inputMosaicId" placeholder="Input Mosaic ID...">
+          </div>
+          <label for="inputNetType" class="col-sm-2 col-form-label">NET Type</label>
+          <div class="col-sm-10">
+            <select class="form-select" id="inputNetType" aria-label="Select NET Type">
+              <option selected value="104">MAIN NET</option>
+              <option value="152">TEST NET</option>
+            </select>
+          </div>
+          <div class="col-sm">
+            <button type="button" class="btn btn-primary" id="buttonGet" onclick="getMosaicInfo()">
+              Get Mosaic Data
+            </button>
+          </div>
+        </div>
+      </form>
+    </section>
+    <section id='mosaicDataArea'></section>
+  </article>
+</body>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+<script src="resource/bundle.min.js"></script>
+<script>
+  async function getMosaicInfo() {
+    disableGetButton();
+    mosaicData = await getOnChainData(
+      document.forms.formMosaic.inputMosaicId.value,
+      document.forms.formMosaic.inputNetType.value
+    );
+    console.log(mosaicData);
+
+    mosaicDataArea = document.createElement('div');
+    mosaicDataArea.appendChild(createDataColumnElement('MosaicId', mosaicData.mosaicId));
+    mosaicDataArea.appendChild(createDataColumnElement('Alias', mosaicData.alias));
+    mosaicDataArea.appendChild(createDataColumnElement('Supply', mosaicData.supply));
+    mosaicDataArea.appendChild(createDataColumnElement('Height', mosaicData.height));
+    mosaicDataArea.appendChild(createDataColumnElement('Address', mosaicData.owner));
+    mosaicDataArea.appendChild(createDataColumnElement('SupplyMutable', mosaicData.supplyMutable));
+    mosaicDataArea.appendChild(createDataColumnElement('Transferable', mosaicData.transferable));
+    mosaicDataArea.appendChild(createDataColumnElement('Restrictable', mosaicData.restrictable));
+    mosaicDataArea.appendChild(createDataColumnElement('Revokable', mosaicData.revokable));
+    mosaicDataArea.appendChild(createDataColumnElement('Title', mosaicData.title));
+    mosaicDataArea.appendChild(createDataColumnElement('Description', mosaicData.description));
+    mosaicDataArea.appendChild(createOnChainDataArea(mosaicData.data));
+    document.getElementById('mosaicDataArea').appendChild(mosaicDataArea);
+    enableGetButton();
+  }
+
+  function createDataColumnElement(key, data) {
+    mosaicDataElement = document.createElement('p');
+    mosaicDataElement.innerText = key + ': ' + ((null !== data) ? data : 'N/A');
+    return mosaicDataElement;
+  }
+
+  function createOnChainDataArea(data) {
+    mosaicDataElement = document.createElement('img');
+    mosaicDataElement.setAttribute('src', data);
+    mosaicDataElement.setAttribute('alt', 'On Chain Data');
+    return mosaicDataElement;
+  }
+
+  function disableGetButton() {
+    document.forms.formMosaic.buttonGet.disabled = true;
+    document.forms.formMosaic.buttonGet.innerText = 'Loading...';
+    elementSpinner = document.createElement('span');
+    elementSpinner.setAttribute('class', 'spinner-grow spinner-grow-sm me-2');
+    elementSpinner.setAttribute('role', 'status');
+    elementSpinner.setAttribute('aria-hidden', 'true');
+    document.forms.formMosaic.buttonGet.prepend(elementSpinner);
+  }
+
+  function enableGetButton() {
+    document.forms.formMosaic.buttonGet.disabled = false;
+    document.forms.formMosaic.buttonGet.innerText = 'Get Mosaic Data';
+  }
+</script>
+
+</html>
