@@ -1,50 +1,76 @@
 
 // symbol-sdk と関連モジュールのインポート
-sym = require("symbol-sdk");
+const sym = require("symbol-sdk");
 const { async } = require('rxjs');
+const nodeBuffer = require("Buffer").Buffer;
+const nodeCrypto = require('crypto');
 
 const MAINNODE = "https://ik1-432-48199.vs.sakura.ne.jp:3001";  // MAINNET
 const TESTNODE = "https://vmi831828.contaboserver.net:3001";    // TESTNET
 
-const PROTOCOL_NAME = 'eternal-book-protocol';
+const PROTOCOL_NAME = 'eternal-book-protocol';  // プロトコル名
+const CHIPER_ALGORITHM = 'aes-256-cbc';         // 暗号化アルゴリズム
 
+// ネットワークタイプ
 const NetTypeEnum = {
-  Invalid : -1,
   Main : 104,
   Test : 152,
 };
 
-repo = null;
-txRepo = null;
-mosaicRepo = null;
-nsRepo = null;
+// オンチェーンデータタイプ
+const OnChainDataTypeEnum = {
+  EBP       : 100,
+  NFTDrive  : 200,
+  COMSA     : 300,
+};
+
+// リポジトリ
+let repo = null;
+let txRepo = null;
+let mosaicRepo = null;
+let nsRepo = null;
 
 // オンチェーンデータの取得
 getOnChainData = (async function(mosaicIdStr, netType) {
-  setRepository(netType);
-  return await nftOrigin1Viewer(mosaicIdStr);
+  // リポジトリ設定
+  if (!(setRepository(netType))) {
+    return null;
+  }
+
+  // モザイク情報の取得
+  const mosaicInfo = await getMosaicInfo(mosaicIdStr);
+  if (null === mosaicInfo) {
+    return null;
+  }
+
+  // オンチェーンデータの取得
+  const onChainData = await getEBPOnChainData(mosaicInfo.mosaicId, mosaicInfo.owner);
+  mosaicInfo.data = (null !== onChainData && 0 < onChainData.length) ? onChainData : null;
+  return mosaicInfo;
 });
 
 // リポジトリ設定
 function setRepository(netType) {
   // 既にリポジトリが設定済みの場合は設定不要
   if (null !== repo) {
-    return;
+    return true;
   }
 
   // ノードURIの取得
-  nodeUri = '';
+  let nodeUri = '';
   switch (Number(netType)) {
+    // メインネット
     case NetTypeEnum.Main:
       nodeUri = MAINNODE;
       break;
   
+    // テストネット
     case NetTypeEnum.Test:
       nodeUri = TESTNODE;
       break;
   
     default:
-      return;
+      return false;
   }
 
   // リポジトリ設定
@@ -52,133 +78,193 @@ function setRepository(netType) {
   txRepo = repo.createTransactionRepository();
   mosaicRepo = repo.createMosaicRepository();
   nsRepo = repo.createNamespaceRepository();
+  return true;
 }
 
-async function nftOrigin1Viewer(mosaicIdStr) {
-  const mosaicData = {};
-  let retHtml = '';
+// モザイク情報を取得する
+async function getMosaicInfo(mosaicIdStr) {
+  // 入力チェック
+  if (('' == mosaicIdStr)) {
+    return null;
+  }
+
+  // モザイク情報の復元
+  const mosaicId = new sym.MosaicId(mosaicIdStr);
+  const mosaicInfo = await mosaicRepo.getMosaic(mosaicId).toPromise();
+  // モザイク情報を抽出
+  const readOnChainData = {};
+  readOnChainData.mosaicId = mosaicInfo.id.toHex();
+  readOnChainData.supply = mosaicInfo.supply.toString();
+  readOnChainData.height = mosaicInfo.startHeight.toString();
+  readOnChainData.owner = mosaicInfo.ownerAddress.address;
+  readOnChainData.supplyMutable = mosaicInfo.flags.supplyMutable;
+  readOnChainData.transferable = mosaicInfo.flags.transferable;
+  readOnChainData.restrictable = mosaicInfo.flags.restrictable;
+  readOnChainData.revokable = mosaicInfo.flags.revokable;
+
+  // モザイクにリンクされているネームスペースを取得
+  readOnChainData.alias = null;
+  const mosaicsName = await nsRepo.getMosaicsNames([mosaicId]).toPromise();
+  if (0 < mosaicsName.length) {
+    const names = mosaicsName.find(name => (name.mosaicId.toString() === mosaicId.toString()));
+    if (0 < names.names.length) {
+      readOnChainData.alias = names.names[0].name;
+    }
+  }
+  return readOnChainData;
+}
+
+// オリジナルフォーマット（eternal-book-protocol）で保存したデータを取得する
+async function getEBPOnChainData(mosaicIdStr, ownerAddress) {
+  const address = sym.Address.createFromRawAddress(ownerAddress);
   try {
-    // 入力チェック
-    if (('' == mosaicIdStr)) {
-      mosaicData.errorMessage = 'MosaicId is not defined.';
-    }
-    if ('' != retHtml) {
-      return mosaicData;
-    }
-
-    // モザイク情報の復元
-    const mosaicId = new sym.MosaicId(mosaicIdStr);
-    const mosaicInfo = await mosaicRepo.getMosaic(mosaicId).toPromise();
-    console.log(mosaicIdStr);
-    console.log(mosaicInfo.id.toHex());
-    // 出力するモザイク情報の表示
-    mosaicData.mosaicId = mosaicInfo.id.toHex();
-    mosaicData.supply = mosaicInfo.supply.toString();
-    mosaicData.height = mosaicInfo.startHeight.toString();
-    mosaicData.owner = mosaicInfo.ownerAddress.address;
-    mosaicData.supplyMutable = mosaicInfo.flags.supplyMutable;
-    mosaicData.transferable = mosaicInfo.flags.transferable;
-    mosaicData.restrictable = mosaicInfo.flags.restrictable;
-    mosaicData.revokable = mosaicInfo.flags.revokable;
-
-    // モザイクにリンクされているネームスペースを取得
-    mosaicData.alias = null;
-    const mosaicsName = await nsRepo.getMosaicsNames([mosaicId]).toPromise();
-    if (0 < mosaicsName.length) {
-      const names = mosaicsName.find(name => (name.mosaicId.toString() === mosaicId.toString()));
-      if (0 < names.names.length) {
-        mosaicData.alias = names.names[0].name;
-      }
-    }
-
-    // モザイク作成したアカウントのアグリゲートトランザクションを全て取得
-    aggTxes = [];
-    isLastData = false;
-    while (!isLastData) {
-      const tx = await txRepo.search({
+    // アカウントのアグリゲートトランザクションを全て取得
+    let allAggTxes = [];
+    let isLastPage = false;
+    while (!isLastPage) {
+      const aggTxes = await txRepo.search({
         type:[
           sym.TransactionType.AGGREGATE_COMPLETE,
           sym.TransactionType.AGGREGATE_BONDED,
         ],
-        address: mosaicInfo.ownerAddress,
+        address: address,
         group: sym.TransactionGroup.Confirmed,
         pageSize: 100
       }).toPromise();
-      aggTxes = aggTxes.concat(tx.data);
-      isLastData = tx.isLastPage;
+      allAggTxes = allAggTxes.concat(aggTxes.data);
+      isLastPage = aggTxes.isLastPage;
     }
 
-    // オンチェーンデータ作成アグリゲートの取得
-    const mosaicCreateAggTxes = [];
-    for (let idx = 0; idx < aggTxes.length; idx++) {
+    // オンチェーンデータアグリゲートの取得
+    const onChainDataAggTxes = [];
+    for (let idx = 0; idx < allAggTxes.length; idx++) {
       const aggTx = await txRepo.getTransaction(
-        aggTxes[idx].transactionInfo.hash,
+        allAggTxes[idx].transactionInfo.hash,
         sym.TransactionGroup.Confirmed
       ).toPromise();
-      // console.log(aggTx);
 
+      // アグリゲート内トランザクションの検証
+      const txes = aggTx.innerTransactions.filter(tx => (
+        (tx.type === sym.TransactionType.TRANSFER)
+        && (tx.signer.address.address === tx.recipientAddress.address)
+      ));
       if (0 === aggTx.innerTransactions.length) {
-        // console.log('innner zero.');
+        // アグリゲート内にトランザクションが存在しない場合は無効データ
         continue;
       }
-
-      // アグリゲート内の全てのトランザクションが転送トランザクションではない場合は無効データ
-      const txes = aggTx.innerTransactions.filter(tx => (tx.type === sym.TransactionType.TRANSFER));
       if (aggTx.innerTransactions.length !== txes.length) {
-        // console.log('invalid transfer.');
+        // アグリゲート内の全てのトランザクションが自分から自分への転送トランザクションではない場合は無効データ
         continue;
       }
 
+      // ヘッダ復号
+      const dataHeader = decryptoHeader(mosaicIdStr, aggTx.innerTransactions[0].message.payload);
+      if (null === dataHeader) {
+        continue;
+      }
       // ヘッダ検証
-      const headerJsonStr = aggTx.innerTransactions[0].message.payload;
-      if (!('{' == headerJsonStr.substr(0, 1)) || !('}' == headerJsonStr.substr(headerJsonStr.length - 1, 1))){
-        // console.log('not json.');
+      if (PROTOCOL_NAME !== dataHeader.version.substr(0, PROTOCOL_NAME.length)){
+        // プロトコル不一致
         continue;
       }
-      headerJson = JSON.parse(headerJsonStr);
-      // if (PROTOCOL_NAME !== headerJson.version.substr(0, PROTOCOL_NAME.length)){
-      //   continue;
-      // }
-      if ((mosaicInfo.id.toHex() !== headerJson.mosaicId) || (mosaicInfo.ownerAddress.address !== headerJson.address)){
-        // console.log('creater invalid.');
+      if ((mosaicIdStr !== dataHeader.mosaicId) || (ownerAddress !== dataHeader.address)){
+        // モザイク情報不一致
         continue;
       }
-      // TODO: 自分から自分への転送判定
-      mosaicCreateAggTxes.push(aggTx);
+
+      // オンチェーンデータアグリゲートとして記録
+      onChainDataAggTxes.push({
+        header: dataHeader,
+        aggregateTx: aggTx,
+      });
+    }
+    // オンチェーンデータアグリゲートが存在しない場合は終了
+    if (0 === onChainDataAggTxes.length) {
+      return null;
     }
 
-    // TODO: 複数データの場合
-    const sotedAggTxes = mosaicCreateAggTxes.sort(function(a, b) {
-      headerA = JSON.parse(a.innerTransactions[0].message.payload);
-      headerB = JSON.parse(b.innerTransactions[0].message.payload);
-      if (Number(headerA.no) > Number(headerB.no)) {return 1;} else {return -1;}
-    })
-    console.log(sotedAggTxes);
+    // オンチェーンデータの最終データを集める
+    const lastDatas = onChainDataAggTxes.filter(aggTx => ('hash' in aggTx.header));
+    // ブロック高順にソート
+    const sortedLastDatas = lastDatas.sort(function(a, b) {
+      if (Number(a.aggregateTx.transactionInfo.height) > Number(b.aggregateTx.transactionInfo.height)) {return 1;} else {return -1;}
+    });
+    console.log(sortedLastDatas);
 
-    // TODO: ちゃんと考える
-    // TODO: 複数対応
-    onChainData = '';
-    nowAggTx = sotedAggTxes[sotedAggTxes.length - 1];
-    while (null !== nowAggTx) {
-      innerData = '';
-      header = JSON.parse(nowAggTx.innerTransactions[0].message.payload);
-      for(idx = 1; idx < nowAggTx.innerTransactions.length;idx++){
-        innerData += nowAggTx.innerTransactions[idx].message.payload;
+    // オンチェーンデータの復元
+    const onChainDatas = [];
+    for(let idxLastData = 0; idxLastData < sortedLastDatas.length; idxLastData++){
+      // 検証のためのハッシュを取得
+      const verifyHash = sortedLastDatas[idxLastData].header.hash;
+      const timestamp = sortedLastDatas[idxLastData].aggregateTx.transactionInfo.timestamp.toString();
+      console.log(timestamp);
+
+      // 末尾のデータから遡ってオンチェーンデータを復元
+      let onChainData = '';
+      let nowAggTx = sortedLastDatas[idxLastData];
+      while (true) {
+        // 1つのアグリゲートに記録されているデータを抽出
+        let innerData = '';
+        for(let idx = 1; idx < nowAggTx.aggregateTx.innerTransactions.length; idx++){
+          innerData += nowAggTx.aggregateTx.innerTransactions[idx].message.payload;
+        }
+        onChainData = innerData + onChainData;
+
+        // 先頭データの場合は終了
+        if (null === nowAggTx.header.prevTx) {
+          break;
+        }
+
+        // 1つ前のアグリゲートトランザクションを検索
+        const prevAggTx = onChainDataAggTxes.filter(aggTx => (nowAggTx.header.prevTx === aggTx.aggregateTx.transactionInfo.hash));
+        if (0 === prevAggTx.length) {
+          // 存在しない場合は復元終了
+          break;
+        } else if (1 < prevAggTx.length) {
+          // ありえないはずのため、ログ出力のみ
+          console.log('transaction duplicated!');
+        }
+        nowAggTx = prevAggTx[0];
       }
-      onChainData = innerData + onChainData;
-      if (null === header.prevTx) {
-        break;
+
+      // 復元したデータのハッシュとトランザクションに保持しているハッシュを検証
+      const hashsum = nodeCrypto.createHash('sha512');
+      const hash = hashsum.update(onChainData).digest('hex');
+      if(hash === verifyHash) {
+        // ハッシュが一致する場合のみ正しいオンチェーンデータとして扱う
+        onChainDatas.push({
+          title: nowAggTx.header.title,
+          description: nowAggTx.header.description,
+          data: onChainData,
+        });
+      } else {
+        console.log(onChainData.length);
+        console.log(hash);
+        console.log(verifyHash);
       }
-      nowAggTx = sotedAggTxes.find(aggTx => (header.prevTx === aggTx.transactionInfo.hash));
-      console.log(nowAggTx);
     }
-    mosaicData.title = header.title;
-    mosaicData.description = header.description;
-    mosaicData.data = onChainData;
+    return onChainDatas;
   } catch (error) {
     // エラー発生時はエラー情報を出力
-    mosaicData.errorMessage = error;
     console.log(error);
   }
-  return mosaicData;
+  return null;
+}
+
+// ヘッダの復元
+function decryptoHeader(mosaicIdStr, encryptoDataStr) {
+  try {
+    const encryptedData = nodeBuffer.from(encryptoDataStr, 'hex');
+    const decipher = nodeCrypto.createDecipheriv(
+      CHIPER_ALGORITHM,
+      'EternalBookProtocol-OnChainData.',
+      mosaicIdStr
+    );
+    const decipherData = decipher.update(encryptedData);
+    const decryptedData = nodeBuffer.concat([decipherData, decipher.final()]);
+    return JSON.parse(decryptedData.toString());
+  } catch (error) {
+    // 仕様に合わない暗号化データ、またはJSONのため無効データと判定する
+  }
+  return null;
 }

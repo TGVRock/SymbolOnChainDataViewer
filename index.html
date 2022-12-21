@@ -5,11 +5,14 @@
 	<title>secret base</title>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1.0" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet"/>
   <script>
     window.addEventListener('DOMContentLoaded', function() {
       // クエリパラメータでデータが与えられている場合は自動読み込み
       const searchParams = new URLSearchParams(window.location.search);
       if (!searchParams.has('mosaicId') || !searchParams.has('netType')) {
+        visibleElement('inputArea');
         return;
       }
       
@@ -31,17 +34,14 @@
         default:
           return;
       }
-
-      document.forms.formMosaic.inputMosaicId.value = queryMosaicId;
-      document.forms.formMosaic.inputNetType.value = netType;
-      getMosaicInfo();
+      getMosaicInfo(queryMosaicId, netType);
     });
   </script>
 </head>
 
 <body id="top">
 	<article>
-    <section>
+    <section class="container d-none" id="inputArea">
       <form id="formMosaic">
         <div class="mb-3 row">
           <label for="inputMosaicId" class="col-sm-2 col-form-label">Mosaic ID</label>
@@ -63,63 +63,139 @@
         </div>
       </form>
     </section>
-    <section id='mosaicDataArea'></section>
+    <section class="d-none" id="loadArea">
+      <div class="position-fixed top-50 start-50 translate-middle text-center">
+        <div class="spinner-border text-secondary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <h3 class="animate__animated animate__fadeIn animate__infinite">Now Loading...</h3>
+      </div>
+    </section>
+    <section class="container" id='mosaicDataArea'></section>
   </article>
 </body>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
 <script src="resource/bundle.min.js"></script>
 <script>
-  async function getMosaicInfo() {
-    disableGetButton();
-    mosaicData = await getOnChainData(
+  async function onGetButtonClick() {
+    document.forms.formMosaic.buttonGet.disabled = true;
+    await getMosaicInfo(
       document.forms.formMosaic.inputMosaicId.value,
       document.forms.formMosaic.inputNetType.value
     );
-    console.log(mosaicData);
+    document.forms.formMosaic.buttonGet.disabled = false;
+  }
 
-    mosaicDataArea = document.createElement('div');
-    mosaicDataArea.appendChild(createDataColumnElement('MosaicId', mosaicData.mosaicId));
-    mosaicDataArea.appendChild(createDataColumnElement('Alias', mosaicData.alias));
-    mosaicDataArea.appendChild(createDataColumnElement('Supply', mosaicData.supply));
-    mosaicDataArea.appendChild(createDataColumnElement('Height', mosaicData.height));
-    mosaicDataArea.appendChild(createDataColumnElement('Address', mosaicData.owner));
-    mosaicDataArea.appendChild(createDataColumnElement('SupplyMutable', mosaicData.supplyMutable));
-    mosaicDataArea.appendChild(createDataColumnElement('Transferable', mosaicData.transferable));
-    mosaicDataArea.appendChild(createDataColumnElement('Restrictable', mosaicData.restrictable));
-    mosaicDataArea.appendChild(createDataColumnElement('Revokable', mosaicData.revokable));
-    mosaicDataArea.appendChild(createDataColumnElement('Title', mosaicData.title));
-    mosaicDataArea.appendChild(createDataColumnElement('Description', mosaicData.description));
-    mosaicDataArea.appendChild(createOnChainDataArea(mosaicData.data));
-    document.getElementById('mosaicDataArea').appendChild(mosaicDataArea);
-    enableGetButton();
+  async function getMosaicInfo(mosaicId, netType) {
+    visibleElement('loadArea');
+    mosaicData = await getOnChainData(mosaicId, netType);
+    if (null === mosaicData) {
+      return;
+    }
+    mosaicDataArea = document.getElementById('mosaicDataArea');
+    mosaicData.data.forEach(element => {
+      mosaicDataArea.appendChild(createOnChainDataArea(element.title, element.description, element.data));
+    });
+    mosaicDataArea.appendChild(createMosaicInfoDataArea(mosaicData));
+    invisibleElement('loadArea');
+  }
+
+  function createOnChainDataArea(title, description, data) {
+    // 画像エリア
+    mosaicDataElement = document.createElement('img');
+    mosaicDataElement.setAttribute('class', 'img-fluid w-100 border border-4 rounded-2 border-light');
+    mosaicDataElement.setAttribute('src', data);
+    mosaicDataElement.setAttribute('alt', 'On Chain Data');
+    onChainDataElement = document.createElement('div');
+    onChainDataElement.setAttribute('class', 'col-lg-6 text-center');
+    onChainDataElement.appendChild(mosaicDataElement);
+    // タイトル
+    titleElement = document.createElement('h3');
+    titleElement.innerText = title;
+    colTitleElement = document.createElement('div');
+    colTitleElement.setAttribute('class', 'col');
+    colTitleElement.appendChild(titleElement);
+    rowTitleElement = document.createElement('div');
+    rowTitleElement.setAttribute('class', 'row');
+    rowTitleElement.appendChild(colTitleElement);
+    // メッセージ
+    descriptionElement = document.createElement('p');
+    descriptionElement.innerText = description;
+    colDescriptionElement = document.createElement('div');
+    colDescriptionElement.setAttribute('class', 'col');
+    colDescriptionElement.appendChild(descriptionElement);
+    rowDescriptionElement = document.createElement('div');
+    rowDescriptionElement.setAttribute('class', 'row');
+    rowDescriptionElement.appendChild(colDescriptionElement);
+    // メタデータエリア
+    metaDataAreaElement = document.createElement('div');
+    metaDataAreaElement.setAttribute('class', 'col-lg-6 align-self-center container');
+    metaDataAreaElement.appendChild(rowTitleElement);
+    metaDataAreaElement.appendChild(rowDescriptionElement);
+    // 統合
+    rowAreaElement = document.createElement('div');
+    rowAreaElement.setAttribute('class', 'row');
+    rowAreaElement.appendChild(onChainDataElement);
+    rowAreaElement.appendChild(metaDataAreaElement);
+    areaElement = document.createElement('article');
+    areaElement.setAttribute('class', 'container animate__animated animate__fadeIn');
+    areaElement.appendChild(rowAreaElement);
+    return areaElement;
+  }
+
+  function createMosaicInfoDataArea(mosaicData) {
+    areaElement = document.createElement('article');
+    areaElement.setAttribute('class', 'container animate__animated animate__fadeIn');
+
+    headerElement = document.createElement('h4');
+    headerElement.innerText = 'Mosaic Information';
+    colHeaderElement = document.createElement('div');
+    colHeaderElement.setAttribute('class', 'col text-center');
+    colHeaderElement.appendChild(headerElement);
+    rowHeaderElement = document.createElement('div');
+    rowHeaderElement.setAttribute('class', 'row');
+    rowHeaderElement.appendChild(colHeaderElement);
+    areaElement.appendChild(rowHeaderElement);
+
+    areaElement.appendChild(createDataColumnElement('MosaicId', mosaicData.mosaicId));
+    areaElement.appendChild(createDataColumnElement('Alias', mosaicData.alias));
+    areaElement.appendChild(createDataColumnElement('Supply', mosaicData.supply));
+    areaElement.appendChild(createDataColumnElement('Height', mosaicData.height));
+    areaElement.appendChild(createDataColumnElement('Address', mosaicData.owner));
+    areaElement.appendChild(createDataColumnElement('SupplyMutable', mosaicData.supplyMutable));
+    areaElement.appendChild(createDataColumnElement('Transferable', mosaicData.transferable));
+    areaElement.appendChild(createDataColumnElement('Restrictable', mosaicData.restrictable));
+    areaElement.appendChild(createDataColumnElement('Revokable', mosaicData.revokable));
+    return areaElement;
   }
 
   function createDataColumnElement(key, data) {
-    mosaicDataElement = document.createElement('p');
-    mosaicDataElement.innerText = key + ': ' + ((null !== data) ? data : 'N/A');
-    return mosaicDataElement;
+    keyElement = document.createElement('p');
+    keyElement.innerText = key;
+    colKeyElement = document.createElement('div');
+    colKeyElement.setAttribute('class', 'col-3');
+    colKeyElement.appendChild(keyElement);
+    dataElement = document.createElement('p');
+    dataElement.innerText = ((null !== data) ? data : 'N/A');
+    colDataElement = document.createElement('div');
+    colDataElement.setAttribute('class', 'col-9');
+    colDataElement.appendChild(dataElement);
+    rowAreaElement = document.createElement('div');
+    rowAreaElement.setAttribute('class', 'row');
+    rowAreaElement.appendChild(colKeyElement);
+    rowAreaElement.appendChild(colDataElement);
+    return rowAreaElement;
   }
 
-  function createOnChainDataArea(data) {
-    mosaicDataElement = document.createElement('img');
-    mosaicDataElement.setAttribute('src', data);
-    mosaicDataElement.setAttribute('alt', 'On Chain Data');
-    return mosaicDataElement;
+  function visibleElement(elementId) {
+    loadArea = document.getElementById(elementId);
+    loadArea.classList.add("d-block");
+    loadArea.classList.remove("d-none");
   }
 
-  function disableGetButton() {
-    document.forms.formMosaic.buttonGet.disabled = true;
-    document.forms.formMosaic.buttonGet.innerText = 'Loading...';
-    elementSpinner = document.createElement('span');
-    elementSpinner.setAttribute('class', 'spinner-grow spinner-grow-sm me-2');
-    elementSpinner.setAttribute('role', 'status');
-    elementSpinner.setAttribute('aria-hidden', 'true');
-    document.forms.formMosaic.buttonGet.prepend(elementSpinner);
-  }
-
-  function enableGetButton() {
-    document.forms.formMosaic.buttonGet.disabled = false;
-    document.forms.formMosaic.buttonGet.innerText = 'Get Mosaic Data';
+  function invisibleElement(elementId) {
+    loadArea = document.getElementById(elementId);
+    loadArea.classList.add("d-none");
+    loadArea.classList.remove("d-block");
   }
 </script>
 
