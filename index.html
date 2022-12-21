@@ -92,9 +92,13 @@
       return;
     }
     mosaicDataArea = document.getElementById('mosaicDataArea');
-    mosaicData.data.forEach(element => {
-      mosaicDataArea.appendChild(createOnChainDataArea(element.title, element.description, element.data));
-    });
+    if (null === mosaicData.data || 0 === mosaicData.data.length) {
+      mosaicDataArea.appendChild(createNoImageArea());
+    } else {
+      mosaicData.data.forEach(element => {
+        mosaicDataArea.appendChild(createOnChainDataArea(element.title, element.description, element.data));
+      });
+    }
     mosaicDataArea.appendChild(createMosaicInfoDataArea(mosaicData));
     invisibleElement('loadArea');
   }
@@ -136,6 +140,25 @@
     rowAreaElement.setAttribute('class', 'row');
     rowAreaElement.appendChild(onChainDataElement);
     rowAreaElement.appendChild(metaDataAreaElement);
+    areaElement = document.createElement('article');
+    areaElement.setAttribute('class', 'container animate__animated animate__fadeIn');
+    areaElement.appendChild(rowAreaElement);
+    return areaElement;
+  }
+
+  function createNoImageArea() {
+    // 画像エリア
+    mosaicDataElement = document.createElement('img');
+    mosaicDataElement.setAttribute('class', 'img-fluid w-100 border border-4 rounded-2 border-light');
+    mosaicDataElement.setAttribute('src', 'resource/nodata.png');
+    mosaicDataElement.setAttribute('alt', 'No Image...');
+    onChainDataElement = document.createElement('div');
+    onChainDataElement.setAttribute('class', 'col-lg-6 text-center');
+    onChainDataElement.appendChild(mosaicDataElement);
+    // 統合
+    rowAreaElement = document.createElement('div');
+    rowAreaElement.setAttribute('class', 'row');
+    rowAreaElement.appendChild(onChainDataElement);
     areaElement = document.createElement('article');
     areaElement.setAttribute('class', 'container animate__animated animate__fadeIn');
     areaElement.appendChild(rowAreaElement);
