@@ -108,7 +108,7 @@
     const startIdx = data.indexOf('data:');
     const endIdx = data.indexOf('base64', startIdx);
     const dataType = data.substring(startIdx + 'data:'.length, endIdx);
-    if ('image/png;' === dataType) {
+    if (('image/png;' === dataType) || ('image/jpeg;' === dataType)) {
       mosaicDataElement = document.createElement('img');
       mosaicDataElement.setAttribute('class', 'img-fluid w-100 border border-4 rounded-2 border-light');
       mosaicDataElement.setAttribute('src', data);
