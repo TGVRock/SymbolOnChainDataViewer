@@ -6,7 +6,8 @@ const nodeBuffer = require("Buffer").Buffer;
 const nodeCrypto = require('crypto');
 
 const MAINNODE = "https://ik1-432-48199.vs.sakura.ne.jp:3001";  // MAINNET
-const TESTNODE = "https://vmi831828.contaboserver.net:3001";    // TESTNET
+const TESTNODE = "https://vmi835904.contaboserver.net:3001";    // TESTNET
+// const TESTNODE = "https://vmi831828.contaboserver.net:3001";    // TESTNET
 
 const PROTOCOL_NAME = 'eternal-book-protocol';  // プロトコル名
 const CHIPER_ALGORITHM = 'aes-256-cbc';         // 暗号化アルゴリズム
@@ -27,13 +28,15 @@ const OnChainDataTypeEnum = {
 // リポジトリ
 let repo = null;
 let txRepo = null;
+let blockRepo = null;
 let mosaicRepo = null;
 let nsRepo = null;
+let epochAdjustment = null;
 
 // オンチェーンデータの取得
 getOnChainData = (async function(mosaicIdStr, netType) {
   // リポジトリ設定
-  if (!(setRepository(netType))) {
+  if (!(await setRepository(netType))) {
     return null;
   }
 
@@ -50,7 +53,7 @@ getOnChainData = (async function(mosaicIdStr, netType) {
 });
 
 // リポジトリ設定
-function setRepository(netType) {
+async function setRepository(netType) {
   // 既にリポジトリが設定済みの場合は設定不要
   if (null !== repo) {
     return true;
@@ -76,15 +79,18 @@ function setRepository(netType) {
   // リポジトリ設定
   repo = new sym.RepositoryFactoryHttp(nodeUri);
   txRepo = repo.createTransactionRepository();
+  blockRepo = repo.createBlockRepository();
   mosaicRepo = repo.createMosaicRepository();
   nsRepo = repo.createNamespaceRepository();
+  epochAdjustment = await repo.getEpochAdjustment().toPromise();
+
   return true;
 }
 
 // モザイク情報を取得する
 async function getMosaicInfo(mosaicIdStr) {
   // 入力チェック
-  if (('' == mosaicIdStr)) {
+  if ('' === mosaicIdStr) {
     return null;
   }
 
@@ -92,26 +98,33 @@ async function getMosaicInfo(mosaicIdStr) {
   const mosaicId = new sym.MosaicId(mosaicIdStr);
   const mosaicInfo = await mosaicRepo.getMosaic(mosaicId).toPromise();
   // モザイク情報を抽出
-  const readOnChainData = {};
-  readOnChainData.mosaicId = mosaicInfo.id.toHex();
-  readOnChainData.supply = mosaicInfo.supply.toString();
-  readOnChainData.height = mosaicInfo.startHeight.toString();
-  readOnChainData.owner = mosaicInfo.ownerAddress.address;
-  readOnChainData.supplyMutable = mosaicInfo.flags.supplyMutable;
-  readOnChainData.transferable = mosaicInfo.flags.transferable;
-  readOnChainData.restrictable = mosaicInfo.flags.restrictable;
-  readOnChainData.revokable = mosaicInfo.flags.revokable;
+  const mosaicInfoData = {};
+  mosaicInfoData.mosaicId = mosaicInfo.id.toHex();
+  mosaicInfoData.supply = mosaicInfo.supply.toString();
+  mosaicInfoData.height = mosaicInfo.startHeight.toString();
+  mosaicInfoData.owner = mosaicInfo.ownerAddress.address;
+  mosaicInfoData.supplyMutable = mosaicInfo.flags.supplyMutable;
+  mosaicInfoData.transferable = mosaicInfo.flags.transferable;
+  mosaicInfoData.restrictable = mosaicInfo.flags.restrictable;
+  mosaicInfoData.revokable = mosaicInfo.flags.revokable;
+  console.log(mosaicInfo);
+
+  // モザイクが作成されたブロックのタイムスタンプを算出
+  const mosaicBlockInfo = await blockRepo.getBlockByHeight(mosaicInfo.startHeight).toPromise();
+  const timestamp = (epochAdjustment * 1000) + Number(mosaicBlockInfo.timestamp.toString());
+  const dateTime = new Date(timestamp);
+  mosaicInfoData.date = dateTime.toLocaleDateString('ja-JP') + ' ' + dateTime.toLocaleTimeString('ja-JP');
 
   // モザイクにリンクされているネームスペースを取得
-  readOnChainData.alias = null;
+  mosaicInfoData.alias = null;
   const mosaicsName = await nsRepo.getMosaicsNames([mosaicId]).toPromise();
   if (0 < mosaicsName.length) {
     const names = mosaicsName.find(name => (name.mosaicId.toString() === mosaicId.toString()));
     if (0 < names.names.length) {
-      readOnChainData.alias = names.names[0].name;
+      mosaicInfoData.alias = names.names[0].name;
     }
   }
-  return readOnChainData;
+  return mosaicInfoData;
 }
 
 // オリジナルフォーマット（eternal-book-protocol）で保存したデータを取得する
@@ -189,15 +202,14 @@ async function getEBPOnChainData(mosaicIdStr, ownerAddress) {
     const sortedLastDatas = lastDatas.sort(function(a, b) {
       if (Number(a.aggregateTx.transactionInfo.height) > Number(b.aggregateTx.transactionInfo.height)) {return 1;} else {return -1;}
     });
-    console.log(sortedLastDatas);
 
     // オンチェーンデータの復元
     const onChainDatas = [];
     for(let idxLastData = 0; idxLastData < sortedLastDatas.length; idxLastData++){
       // 検証のためのハッシュを取得
       const verifyHash = sortedLastDatas[idxLastData].header.hash;
-      const timestamp = sortedLastDatas[idxLastData].aggregateTx.transactionInfo.timestamp.toString();
-      console.log(timestamp);
+      const timestamp = (epochAdjustment * 1000) + Number(sortedLastDatas[idxLastData].aggregateTx.transactionInfo.timestamp.toString());
+      const dateTime = new Date(timestamp);
 
       // 末尾のデータから遡ってオンチェーンデータを復元
       let onChainData = '';
@@ -235,6 +247,7 @@ async function getEBPOnChainData(mosaicIdStr, ownerAddress) {
         onChainDatas.push({
           title: nowAggTx.header.title,
           description: nowAggTx.header.description,
+          date: dateTime.toLocaleDateString('ja-JP') + ' ' + dateTime.toLocaleTimeString('ja-JP'),
           data: onChainData,
         });
       } else {
