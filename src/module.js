@@ -40,16 +40,20 @@ getOnChainData = (async function(mosaicIdStr, netType) {
     return null;
   }
 
-  // モザイク情報の取得
-  const mosaicInfo = await getMosaicInfo(mosaicIdStr);
-  if (null === mosaicInfo) {
+  try {
+    // モザイク情報の取得
+    const mosaicInfo = await getMosaicInfo(mosaicIdStr);
+    if (null === mosaicInfo) {
+      return null;
+    }
+    // オンチェーンデータの取得
+    const onChainData = await getEBPOnChainData(mosaicInfo.mosaicId, mosaicInfo.owner);
+    mosaicInfo.data = (null !== onChainData && 0 < onChainData.length) ? onChainData : null;
+    return mosaicInfo;
+  } catch (error) {
+    console.log(error);
     return null;
   }
-
-  // オンチェーンデータの取得
-  const onChainData = await getEBPOnChainData(mosaicInfo.mosaicId, mosaicInfo.owner);
-  mosaicInfo.data = (null !== onChainData && 0 < onChainData.length) ? onChainData : null;
-  return mosaicInfo;
 });
 
 // リポジトリ設定
@@ -107,7 +111,6 @@ async function getMosaicInfo(mosaicIdStr) {
   mosaicInfoData.transferable = mosaicInfo.flags.transferable;
   mosaicInfoData.restrictable = mosaicInfo.flags.restrictable;
   mosaicInfoData.revokable = mosaicInfo.flags.revokable;
-  console.log(mosaicInfo);
 
   // モザイクが作成されたブロックのタイムスタンプを算出
   const mosaicBlockInfo = await blockRepo.getBlockByHeight(mosaicInfo.startHeight).toPromise();
@@ -250,10 +253,6 @@ async function getEBPOnChainData(mosaicIdStr, ownerAddress) {
           date: dateTime.toLocaleDateString('ja-JP') + ' ' + dateTime.toLocaleTimeString('ja-JP'),
           data: onChainData,
         });
-      } else {
-        console.log(onChainData.length);
-        console.log(hash);
-        console.log(verifyHash);
       }
     }
     return onChainDatas;

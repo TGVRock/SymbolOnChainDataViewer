@@ -71,9 +71,40 @@
         <h3 class="animate__animated animate__fadeIn animate__infinite">Now Loading...</h3>
       </div>
     </section>
-    <section class="container text-break" id='mosaicDataArea'></section>
+    <section class="container animate__animated animate__fadeIn text-break d-none" id='mosaicDataArea'>
+      <article class="container" id="onChainDataArea"></article>
+      <article class="container" id="mosaicInfoArea">
+        <div class="row">
+          <div class="col-12 text-center"><h4>Mosaic Information</h4></div>
+        </div>
+      </article>
+    </section>
   </article>
 </body>
+
+<template id="templateOnChainDataArea">
+  <article class="container animate__animated animate__fadeIn">
+    <div class="row">
+      <div class="col-lg-6 align-self-center text-center data__data"></div>
+      <div class="col-lg-6 align-self-center data__meta">
+        <h6 class="text-muted data__date"></h6>
+        <h3 class="data__title"></h3>
+        <p class="data__description"></p>
+      </div>
+    </div>
+  </article>
+</template>
+<template id="templateOnChainImageData">
+  <img class="img-fluid w-100 border border-4 rounded-2 border-light" src="" alt="On Chain Data">
+</template>
+<template id="templateOnChainAudioData">
+  <audio src="" controls="true" autoplay="true" loop="true"></audio>
+</template>
+<template id="templateMosaicInfoRow">
+  <div class="col-3"><p class="mosaic_info_col__title"></p></div>
+  <div class="col-9"><p class="mosaic_info_col__content"></p></div>
+</template>
+
 <script src="resource/bundle.min.js"></script>
 <script>
   async function onGetButtonClick() {
@@ -88,154 +119,89 @@
   async function getMosaicInfo(mosaicId, netType) {
     visibleElement('loadArea');
     mosaicData = await getOnChainData(mosaicId, netType);
+    onChainDataArea = document.getElementById('onChainDataArea');
     if (null === mosaicData) {
-      return;
-    }
-    mosaicDataArea = document.getElementById('mosaicDataArea');
-    if (null === mosaicData.data || 0 === mosaicData.data.length) {
-      mosaicDataArea.appendChild(createNoImageArea());
+      onChainDataArea.appendChild(createNoImageArea());
     } else {
-      mosaicData.data.forEach(element => {
-        mosaicDataArea.appendChild(createOnChainDataArea(element.date, element.title, element.description, element.data));
-      });
+      if (null === mosaicData.data || 0 === mosaicData.data.length) {
+        onChainDataArea.appendChild(createNoImageArea());
+      } else {
+        mosaicData.data.forEach(onChainData => {
+          onChainDataArea.appendChild(createOnChainDataArea(onChainData));
+        });
+      }
+      createMosaicInfoDataArea(mosaicData);
     }
-    mosaicDataArea.appendChild(createMosaicInfoDataArea(mosaicData));
     invisibleElement('loadArea');
-  }
-
-  function createOnChainDataArea(date, title, description, data) {
-    // オンチェーンデータエリア
-    const startIdx = data.indexOf('data:');
-    const endIdx = data.indexOf('base64', startIdx);
-    const dataType = data.substring(startIdx + 'data:'.length, endIdx);
-    if (('image/png;' === dataType) || ('image/jpeg;' === dataType)) {
-      mosaicDataElement = document.createElement('img');
-      mosaicDataElement.setAttribute('class', 'img-fluid w-100 border border-4 rounded-2 border-light');
-      mosaicDataElement.setAttribute('src', data);
-      mosaicDataElement.setAttribute('alt', 'On Chain Data');
-      onChainDataElement = document.createElement('div');
-      onChainDataElement.setAttribute('class', 'col-lg-6 text-center');
-      onChainDataElement.appendChild(mosaicDataElement);
-    } else if('audio/mpeg;' === dataType) {
-      mosaicDataElement = document.createElement('audio');
-      mosaicDataElement.setAttribute('src', data);
-      mosaicDataElement.setAttribute('type', 'audio/mp3');
-      mosaicDataElement.setAttribute('controls', 'true');
-      mosaicDataElement.setAttribute('autoplay', 'true');
-      mosaicDataElement.setAttribute('loop', 'true');
-      onChainDataElement = document.createElement('div');
-      onChainDataElement.setAttribute('class', 'col-lg-6 text-center');
-      onChainDataElement.appendChild(mosaicDataElement);
-    } else {
-      createNoImageArea();
-    }
-    // 登録日時
-    dateElement = document.createElement('h6');
-    dateElement.setAttribute('class', 'text-muted');
-    dateElement.innerText = date;
-    colDateElement = document.createElement('div');
-    colDateElement.setAttribute('class', 'col');
-    colDateElement.appendChild(dateElement);
-    rowDateElement = document.createElement('div');
-    rowDateElement.setAttribute('class', 'row');
-    rowDateElement.appendChild(colDateElement);
-    // タイトル
-    titleElement = document.createElement('h3');
-    titleElement.innerText = title;
-    colTitleElement = document.createElement('div');
-    colTitleElement.setAttribute('class', 'col');
-    colTitleElement.appendChild(titleElement);
-    rowTitleElement = document.createElement('div');
-    rowTitleElement.setAttribute('class', 'row');
-    rowTitleElement.appendChild(colTitleElement);
-    // メッセージ
-    descriptionElement = document.createElement('p');
-    descriptionElement.innerText = description;
-    colDescriptionElement = document.createElement('div');
-    colDescriptionElement.setAttribute('class', 'col');
-    colDescriptionElement.appendChild(descriptionElement);
-    rowDescriptionElement = document.createElement('div');
-    rowDescriptionElement.setAttribute('class', 'row');
-    rowDescriptionElement.appendChild(colDescriptionElement);
-    // メタデータエリア
-    metaDataAreaElement = document.createElement('div');
-    metaDataAreaElement.setAttribute('class', 'col-lg-6 align-self-center container');
-    metaDataAreaElement.appendChild(rowDateElement);
-    metaDataAreaElement.appendChild(rowTitleElement);
-    metaDataAreaElement.appendChild(rowDescriptionElement);
-    // 統合
-    rowAreaElement = document.createElement('div');
-    rowAreaElement.setAttribute('class', 'row');
-    rowAreaElement.appendChild(onChainDataElement);
-    rowAreaElement.appendChild(metaDataAreaElement);
-    areaElement = document.createElement('article');
-    areaElement.setAttribute('class', 'container animate__animated animate__fadeIn');
-    areaElement.appendChild(rowAreaElement);
-    return areaElement;
-  }
-
-  function createNoImageArea() {
-    // 画像エリア
-    mosaicDataElement = document.createElement('img');
-    mosaicDataElement.setAttribute('class', 'img-fluid w-100 border border-4 rounded-2 border-light');
-    mosaicDataElement.setAttribute('src', 'resource/nodata.png');
-    mosaicDataElement.setAttribute('alt', 'No Image...');
-    onChainDataElement = document.createElement('div');
-    onChainDataElement.setAttribute('class', 'col-lg-6 text-center');
-    onChainDataElement.appendChild(mosaicDataElement);
-    // 統合
-    rowAreaElement = document.createElement('div');
-    rowAreaElement.setAttribute('class', 'row justify-content-center');
-    rowAreaElement.appendChild(onChainDataElement);
-    areaElement = document.createElement('article');
-    areaElement.setAttribute('class', 'container animate__animated animate__fadeIn');
-    areaElement.appendChild(rowAreaElement);
-    return areaElement;
+    visibleElement('mosaicDataArea');
   }
 
   function createMosaicInfoDataArea(mosaicData) {
-    areaElement = document.createElement('article');
-    areaElement.setAttribute('class', 'container animate__animated animate__fadeIn');
+    mosaicInfoArea = document.getElementById('mosaicInfoArea');
+    mosaicInfoRow = mosaicInfoArea.firstElementChild;
 
-    headerElement = document.createElement('h4');
-    headerElement.innerText = 'Mosaic Information';
-    colHeaderElement = document.createElement('div');
-    colHeaderElement.setAttribute('class', 'col text-center');
-    colHeaderElement.appendChild(headerElement);
-    rowHeaderElement = document.createElement('div');
-    rowHeaderElement.setAttribute('class', 'row');
-    rowHeaderElement.appendChild(colHeaderElement);
-    areaElement.appendChild(rowHeaderElement);
+    mosaicInfoRow.appendChild(createDataColumnElement('MosaicId', mosaicData.mosaicId));
+    mosaicInfoRow.appendChild(createDataColumnElement('Alias', mosaicData.alias));
+    mosaicInfoRow.appendChild(createDataColumnElement('Supply', mosaicData.supply));
+    mosaicInfoRow.appendChild(createDataColumnElement('Height', mosaicData.height));
+    mosaicInfoRow.appendChild(createDataColumnElement('Date', mosaicData.date));
+    mosaicInfoRow.appendChild(createDataColumnElement('Address', mosaicData.owner));
+    mosaicInfoRow.appendChild(createDataColumnElement('SupplyMutable', mosaicData.supplyMutable));
+    mosaicInfoRow.appendChild(createDataColumnElement('Transferable', mosaicData.transferable));
+    mosaicInfoRow.appendChild(createDataColumnElement('Restrictable', mosaicData.restrictable));
+    mosaicInfoRow.appendChild(createDataColumnElement('Revokable', mosaicData.revokable));
+  }
 
-    areaElement.appendChild(createDataColumnElement('MosaicId', mosaicData.mosaicId));
-    areaElement.appendChild(createDataColumnElement('Alias', mosaicData.alias));
-    areaElement.appendChild(createDataColumnElement('Supply', mosaicData.supply));
-    areaElement.appendChild(createDataColumnElement('Height', mosaicData.height));
-    areaElement.appendChild(createDataColumnElement('Date', mosaicData.date));
-    areaElement.appendChild(createDataColumnElement('Address', mosaicData.owner));
-    areaElement.appendChild(createDataColumnElement('SupplyMutable', mosaicData.supplyMutable));
-    areaElement.appendChild(createDataColumnElement('Transferable', mosaicData.transferable));
-    areaElement.appendChild(createDataColumnElement('Restrictable', mosaicData.restrictable));
-    areaElement.appendChild(createDataColumnElement('Revokable', mosaicData.revokable));
-    return areaElement;
+  function getOnChainDataElement(data) {
+    const startIdx = ('string' === typeof(data)) ? data.indexOf('data:') : -1;
+    const endIdx = (-1 < startIdx) ? data.indexOf('base64', startIdx) : -1;
+    const dataType = ((-1 < startIdx) && (-1 < endIdx)) ? data.substring(startIdx + 'data:'.length, endIdx) : null;
+    let templateDataName = '';
+    switch (dataType) {
+      case 'image/png;':
+      case 'image/jpeg;':
+        templateDataName = 'templateOnChainImageData';
+        break;
+    
+      case 'audio/mpeg;':
+        templateDataName = 'templateOnChainAudioData';
+        break;
+    
+      default:
+        templateDataName = 'templateOnChainImageData';
+        data = 'resource/nodata.png';
+        break;
+    }
+    const template = document.getElementById(templateDataName);
+    const clone = template.content.cloneNode(true);
+    clone.firstElementChild.src = data;
+    return clone;
+  }
+
+  function createOnChainDataArea(onChainData) {
+    const template = document.getElementById('templateOnChainDataArea');
+    const clone = template.content.cloneNode(true);
+    clone.querySelector('.data__data').appendChild(getOnChainDataElement(onChainData.data));
+    clone.querySelector('.data__date').innerText = onChainData.date;
+    clone.querySelector('.data__title').innerText = onChainData.title;
+    clone.querySelector('.data__description').innerText = onChainData.description;
+    return clone;
+  }
+
+  function createNoImageArea() {
+    const template = document.getElementById('templateOnChainDataArea');
+    const clone = template.content.cloneNode(true);
+    clone.querySelector('.data__data').appendChild(getOnChainDataElement(null));
+    clone.querySelector('.data__meta').remove();
+    return clone;
   }
 
   function createDataColumnElement(key, data) {
-    keyElement = document.createElement('p');
-    keyElement.innerText = key;
-    colKeyElement = document.createElement('div');
-    colKeyElement.setAttribute('class', 'col-3');
-    colKeyElement.appendChild(keyElement);
-    dataElement = document.createElement('p');
-    dataElement.innerText = ((null !== data) ? data : 'N/A');
-    colDataElement = document.createElement('div');
-    colDataElement.setAttribute('class', 'col-9');
-    colDataElement.appendChild(dataElement);
-    rowAreaElement = document.createElement('div');
-    rowAreaElement.setAttribute('class', 'row');
-    rowAreaElement.appendChild(colKeyElement);
-    rowAreaElement.appendChild(colDataElement);
-    return rowAreaElement;
+    const template = document.getElementById('templateMosaicInfoRow');
+    const clone = template.content.cloneNode(true);
+    clone.querySelector('.mosaic_info_col__title').innerText = key;
+    clone.querySelector('.mosaic_info_col__content').innerText = ((null !== data) ? data : 'N/A');
+    return clone;
   }
 
   function visibleElement(elementId) {
